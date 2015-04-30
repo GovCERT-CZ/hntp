@@ -283,7 +283,7 @@ class NTPPacket:
         print "packet: %s" % (base64.b64encode(data))
         if data == '\x16\x02\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00':
             raise NTPException("Version scan")
-        return
+            return
         try:
             unpacked = struct.unpack(NTPPacket._PACKET_FORMAT,
                     data[0:struct.calcsize(NTPPacket._PACKET_FORMAT)])
