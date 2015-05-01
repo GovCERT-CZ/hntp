@@ -6,15 +6,13 @@ import struct
 import time
 import base64
 import Queue
-import pygeoip
 import mutex
 import threading
 import select
 import datetime
-import redis
 import ConfigParser
 import json
-import hpfeeds
+
 
 
 import logging
@@ -41,50 +39,70 @@ syslog.openlog('HONEYNTP', syslog.LOG_PID, syslog.LOG_USER)
 listenIp = config.get('global','listen')
 listenPort = int(config.get('global','port'))
 
+hpc = None
+gd = None
+rediscl = None
+
+# determine if hpfeeds is used
+LogToHpfeeds = False
+
+if config.has_section('log_hpfeed'):
+    import hpfeeds
+    import pygeoip
+    LogToHpfeeds = True
+    hpf_host = config.get('log_hpfeed', 'host')
+    hpf_port = int(config.get('log_hpfeed', 'port'))
+    hpf_CHANNELS= []
+    hpf_CHANNELS.append(config.get('log_hpfeed', 'channel'))
+    hpf_IDENT = config.get('log_hpfeed', 'ident')
+    hpf_SECRET = config.get('log_hpfeed', 'secret')
+    hpc = hpfeeds.new(hpf_host, hpf_port, hpf_IDENT, hpf_SECRET)
+    gd  = pygeoip.GeoIP('GeoLiteCity.dat')
+
+    logger.info("Connected to %s" % hpc.brokername)
 
 
-redis_db = int(config.get('honeyntp','redis_db'))
-redis_host = config.get('honeyntp','redis_host')
-redis_port = int(config.get('honeyntp','redis_port'))
-hpf_host = config.get('hpfeed', "host")
-hpf_port = int(config.get('hpfeed', "port"))
-hpf_CHANNELS= []
-hpf_CHANNELS.append(config.get("hpfeed", "channel"))
-gd  = pygeoip.GeoIP('GeoLiteCity.dat')
-hpf_IDENT = config.get("hpfeed", 'ident')
-hpf_SECRET = config.get("hpfeed", 'secret')
-hpc = hpfeeds.new(hpf_host, hpf_port, hpf_IDENT, hpf_SECRET)
+# determine if log to redis db
+LogToRedis = False
 
-logger.info("Connected to %s" % hpc.brokername)
+if config.has_section('log_redis'):
+    import redis
+    LogToRedis = True
+    redis_db = int(config.get('log_redis','redis_db'))
+    redis_host = config.get('log_redis','redis_host')
+    redis_port = int(config.get('log_redis','redis_port'))
+    rediscl = redis.Redis(host = redis_host, port = redis_port, db = redis_db)
 
 
-rediscl = redis.Redis(host = redis_host, port = redis_port, db = redis_db)
 
-
-def update_redis(source, port):
+def log(source, port):
     source = filter(lambda c: c.isalnum() or c == '.' or c == '/', source)
 
-
     timestamp = int(int(time.time()))
-    skey = "B:%s:%s" % (source, port)
-    lkey = "E:%s:%s" % (source, port)
-    rediscl.set(lkey, timestamp)
-    if not rediscl.exists(skey):
-        rediscl.set(skey, timestamp)
+
     msg = "NTP scan: %s:%s - %s" % (source,port, datetime.datetime.now())
     print msg
     logger.info("msg: %s" % msg)
-    d = gd.record_by_addr(source)
-    if d == None:
-        d = {"latitude":25.03, "logitude": 121.53, "country_code": "TW"}
-    dat = {}
-    dat["latitude"] = d["latitude"]
-    dat["longitude"] = d["longitude"]
-    dat["type"] = "%s: %s" % (source, msg)
-    dat["countrycode"] = d["country_code"]
-    dat["city"] = d["city"]
-    fmsg = json.dumps(dat)
-    hpc.publish(hpf_CHANNELS, fmsg)
+
+    if LogToRedis:
+        skey = "B:%s:%s" % (source, port)
+        lkey = "E:%s:%s" % (source, port)
+        rediscl.set(lkey, timestamp)
+        if not rediscl.exists(skey):
+            rediscl.set(skey, timestamp)
+
+    if LogToHpfeeds:
+        d = gd.record_by_addr(source)
+        if d == None:
+            d = {"latitude":25.03, "logitude": 121.53, "country_code": "TW"}
+        dat = {}
+        dat["latitude"] = d["latitude"]
+        dat["longitude"] = d["longitude"]
+        dat["type"] = "%s: %s" % (source, msg)
+        dat["countrycode"] = d["country_code"]
+        dat["city"] = d["city"]
+        fmsg = json.dumps(dat)
+        hpc.publish(hpf_CHANNELS, fmsg)
 
 
 
@@ -354,7 +372,7 @@ class WorkThread(threading.Thread):
                 data,addr,recvTimestamp = taskQueue.get(timeout=1)
                 recvPacket = NTPPacket()
                 print "Connected from " , addr
-                update_redis(addr[0], addr[1])
+                log(addr[0], addr[1])
                 try:
                     recvPacket.from_data(data)
                 except Exception, e:
@@ -375,7 +393,7 @@ class WorkThread(threading.Thread):
                 sendPacket.recv_timestamp = recvTimestamp
                 sendPacket.tx_timestamp = system_to_ntp_time(0)
                 socket.sendto(sendPacket.to_data(),addr)
-                update_redis(addr[0], addr[1])
+#                log(addr[0], addr[1])
                 #                print "Sent to %s:%d" % (addr[0],addr[1])
                 time.sleep(2) # slow.. take it slow ;)
             except Queue.Empty:
