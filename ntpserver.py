@@ -37,12 +37,15 @@ config.read("honeyntp.conf")
 import syslog
 syslog.openlog('HONEYNTP', syslog.LOG_PID, syslog.LOG_USER)
 
+# listen address and port
+listenIp = config.get('global','listen')
+listenPort = int(config.get('global','port'))
+
+
 
 redis_db = int(config.get('honeyntp','redis_db'))
-host = config.get('honeyntp','listen')
 redis_host = config.get('honeyntp','redis_host')
 redis_port = int(config.get('honeyntp','redis_port'))
-port = int(config.get('honeyntp','port_query'))
 hpf_host = config.get('hpfeed', "host")
 hpf_port = int(config.get('hpfeed', "port"))
 hpf_CHANNELS= []
@@ -379,8 +382,7 @@ class WorkThread(threading.Thread):
                 continue
 
 
-listenIp = "0.0.0.0"
-listenPort = 123
+
 socket = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
 socket.bind((listenIp,listenPort))
 print "local socket: ", socket.getsockname();
