@@ -75,12 +75,12 @@ if config.has_section('log_redis'):
 
 
 
-def log(source, port):
+def log(info="NTP scan", source, port):
     source = filter(lambda c: c.isalnum() or c == '.' or c == '/', source)
 
     timestamp = int(int(time.time()))
 
-    msg = "NTP scan: %s:%s - %s" % (source,port, datetime.datetime.now())
+    msg = "%s: %s:%s - %s" % (info,source,port, datetime.datetime.now())
     print msg
     logger.info("msg: %s" % msg)
 
@@ -303,6 +303,7 @@ class NTPPacket:
         """
         print "packet: %s" % (base64.b64encode(data))
         if data == '\x16\x02\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00':
+            log("Version scan", addr[0], addr[1])
             raise NTPException("Version scan")
             return
         try:
