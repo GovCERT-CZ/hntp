@@ -75,7 +75,7 @@ if config.has_section('log_redis'):
 
 
 
-def log(info="NTP scan", source, port):
+def log(source, port, info="NTP scan"):
     source = filter(lambda c: c.isalnum() or c == '.' or c == '/', source)
 
     timestamp = int(int(time.time()))
@@ -303,7 +303,7 @@ class NTPPacket:
         """
         print "packet: %s" % (base64.b64encode(data))
         if data == '\x16\x02\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00':
-            log("Version scan", addr[0], addr[1])
+            log(addr[0], addr[1], "Version scan")
             raise NTPException("Version scan")
             return
         try:
