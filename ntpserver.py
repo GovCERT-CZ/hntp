@@ -220,7 +220,7 @@ class NTPPacket:
     _PACKET_FORMAT = "!B B B b 11I"
     """packet format to pack/unpack"""
 
-    def __init__(self, version=2, mode=3, tx_timestamp=0):
+    def __init__(self, source_addr, source_port, version=2, mode=3, tx_timestamp=0):
         """Constructor.
 
         Parameters:
@@ -228,6 +228,10 @@ class NTPPacket:
         mode         -- packet mode (client, server)
         tx_timestamp -- packet transmit timestamp
         """
+        
+        self.source_addr = source_addr
+        self.source_port = source_port
+        
         self.leap = 0
         """leap second indicator"""
         self.version = version
@@ -303,7 +307,7 @@ class NTPPacket:
         """
         print "packet: %s" % (base64.b64encode(data))
         if data == '\x16\x02\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00':
-            log(addr[0], addr[1], "Version scan")
+            log(self.source_addr, self.source_port, "Version scan")
             raise NTPException("Version scan")
             return
         try:
@@ -371,7 +375,7 @@ class WorkThread(threading.Thread):
                 break
             try:
                 data,addr,recvTimestamp = taskQueue.get(timeout=1)
-                recvPacket = NTPPacket()
+                recvPacket = NTPPacket(addr[0], addr[1])
                 print "Connected from " , addr
                 log(addr[0], addr[1])
                 try:
@@ -380,7 +384,7 @@ class WorkThread(threading.Thread):
                     print e
                     continue
                 timeStamp_high,timeStamp_low = recvPacket.GetTxTimeStamp()
-                sendPacket = NTPPacket(version=3,mode=4)
+                sendPacket = NTPPacket(addr[0], addr[1], version=3,mode=4)
                 sendPacket.stratum = 2
                 sendPacket.poll = 10
                 '''
